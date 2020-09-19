@@ -1,2 +1,2 @@
 # loleros-bot
-Bot to get info and tracking of summoners
+Bot to get summoners info and tracking match

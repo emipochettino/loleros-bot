@@ -2,6 +2,7 @@ package main
 
 import (
 	application "github.com/emipochettino/loleros-bot/application/services"
+	"github.com/emipochettino/loleros-bot/infrastructure/adapters/bots"
 	infrastructure "github.com/emipochettino/loleros-bot/infrastructure/adapters/providers"
 	"os"
 )
@@ -16,6 +17,6 @@ func main() {
 
 	matchService := application.NewMatchService(provider)
 
-	//TODO parametrize SERVER (EUW, LAS, LAN, NA)
-	matchService.FindCurrentMatchBySummonerName("test")
+	lolerosBot := bots.NewLolerosBot(matchService)
+	lolerosBot.Start()
 }
