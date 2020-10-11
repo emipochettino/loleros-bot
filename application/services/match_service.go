@@ -4,7 +4,6 @@ import (
 	"github.com/emipochettino/loleros-bot/domain"
 	providers "github.com/emipochettino/loleros-bot/infrastructure/adapters/providers/dtos"
 	"log"
-	"time"
 )
 
 type MatchService interface {
@@ -26,28 +25,24 @@ type matchService struct {
 func (m matchService) FindCurrentMatchByRegionAndSummonerName(region string, summonerName string) (*domain.Match, error) {
 	summoner, err := m.ritoProvider.FindSummonerByRegionAndName(region, summonerName)
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
-	log.Printf("summoner: %+v\n", *summoner)
 
 	matchDTO, err := m.ritoProvider.FindMatchBySummonerId(region, summoner.Id)
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
-	log.Printf("Match time: %s", time.Unix(0, matchDTO.GameStartTime*int64(time.Millisecond)))
 
-	queue, err := m.ritoProvider.FindQueueById(matchDTO.GameQueueConfigId)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	log.Printf("queue: %+v\n", *queue)
-
-	var summoners []domain.Summoner
+	/*
+		//TODO check if it is necessary
+		queue, err := m.ritoProvider.FindQueueById(matchDTO.GameQueueConfigId)
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	//TODO make this for async
+	var summoners []domain.Summoner
 	for _, participant := range matchDTO.Participants {
 		summonerDTO, err := m.ritoProvider.FindSummonerByRegionAndId(region, participant.SummonerId)
 		if err != nil {
@@ -56,17 +51,16 @@ func (m matchService) FindCurrentMatchByRegionAndSummonerName(region string, sum
 		}
 		leagues, err := m.ritoProvider.FindLeaguesByRegionAndSummonerId(region, summonerDTO.Id)
 		if err != nil {
-			log.Printf("error getting league for summonerDTO [%s], error [%s]", summonerDTO.Name, err)
+			//log.Printf("error getting league for summonerDTO [%s], error [%s]", summonerDTO.Name, err)
 			continue
 		}
 		summoner := providers.MapToSummonerModel(*summonerDTO, participant, leagues)
-		log.Printf("Summoner name: [%s], level [%d], %+v, %+v", summoner.GetName(), summoner.GetLevel(), summoner.GetLeague(), *summoner.GetTeam())
+		//log.Printf("Summoner name: [%s], level [%d], %+v, %+v", summoner.GetName(), summoner.GetLevel(), summoner.GetLeague(), *summoner.GetTeam())
 
 		summoners = append(summoners, summoner)
 	}
 
 	match := domain.NewMatch(matchDTO.GameStartTime, summoners)
-	log.Printf("time: %+v\n", match.GetCurrentTimeInMinutes())
 
 	return &match, nil
 }
