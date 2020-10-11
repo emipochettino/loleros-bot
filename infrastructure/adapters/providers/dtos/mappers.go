@@ -7,7 +7,7 @@ func MapToSummonerModel(summoner SummonerDTO, participant ParticipantDTO, league
 	for _, league := range leagues {
 		if "RANKED_SOLO_5x5" == league.QueueType {
 			soloQueueLeague = &league
-			continue
+			break
 		}
 	}
 	var league domain.League
