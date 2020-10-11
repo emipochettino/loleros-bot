@@ -1,6 +1,7 @@
 package infrastructure
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/emipochettino/loleros-bot/application/services"
@@ -156,5 +157,9 @@ func NewRitoProvider(token string) (application.RitoProvider, error) {
 	if len(token) == 0 {
 		return nil, fmt.Errorf("rito token should exist")
 	}
-	return ritoProvider{client: http.Client{}, token: token}, nil
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify : true},
+	}
+
+	return ritoProvider{client: http.Client{Transport: tr}, token: token}, nil
 }
