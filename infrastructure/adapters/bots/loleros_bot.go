@@ -12,6 +12,19 @@ import (
 	"strings"
 )
 
+var regions = map[string]string{
+	"euw_match":  "euw1",
+	"na_match":   "na1",
+	"las_match":  "la2",
+	"lan_match":  "la1",
+	"br_match":   "br1",
+	"eune_match": "eun1",
+	"jp_match":   "jp1",
+	"oc_match":   "oc1",
+	"ru_match":   "ru",
+	"tr_match":   "tr1",
+}
+
 type lolerosBot struct {
 	matchService application.MatchService
 	bot          *tgbotapi.BotAPI
@@ -35,29 +48,11 @@ func (l lolerosBot) Start() {
 			var match *domain.Match
 			var err error
 
-			switch command := update.Message.Command(); command {
-			case "euw_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("euw1", update.Message.CommandArguments())
-			case "na_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("na1", update.Message.CommandArguments())
-			case "las_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("la2", update.Message.CommandArguments())
-			case "lan_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("la1", update.Message.CommandArguments())
-			case "br_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("br1", update.Message.CommandArguments())
-			case "eune_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("eun1", update.Message.CommandArguments())
-			case "jp_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("jp1", update.Message.CommandArguments())
-			case "oc_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("oc1", update.Message.CommandArguments())
-			case "ru_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("ru", update.Message.CommandArguments())
-			case "tr_match":
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName("tr1", update.Message.CommandArguments())
-			default:
-				fmt.Println(command)
+			command := update.Message.Command()
+			if region, existCommand := regions[command]; !existCommand {
+				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName(region, update.Message.CommandArguments())
+			} else {
+				err = fmt.Errorf("command [%s] not found", command)
 			}
 
 			answer := getAnswer(match, err)
