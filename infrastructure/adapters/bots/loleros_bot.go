@@ -49,7 +49,7 @@ func (l lolerosBot) Start() {
 			var err error
 
 			command := update.Message.Command()
-			if region, existCommand := regions[command]; !existCommand {
+			if region, existCommand := regions[command]; existCommand {
 				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName(region, update.Message.CommandArguments())
 			} else {
 				err = fmt.Errorf("command [%s] not found", command)
