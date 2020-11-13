@@ -3,9 +3,9 @@ package bots
 import (
 	"crypto/tls"
 	"fmt"
-	application "github.com/emipochettino/loleros-bot/application/services"
-	"github.com/emipochettino/loleros-bot/domain"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	application "github.com/emipochettino/loleros-bot/application/dto"
+	services "github.com/emipochettino/loleros-bot/application/services"
+	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"log"
 	"net/http"
 	"os"
@@ -26,7 +26,7 @@ var regions = map[string]string{
 }
 
 type lolerosBot struct {
-	matchService application.MatchService
+	matchService services.MatchService
 	bot          *tgbotapi.BotAPI
 }
 
@@ -45,17 +45,17 @@ func (l lolerosBot) Start() {
 				return
 			}
 
-			var match *domain.Match
+			var summoners []application.SummonerDTO
 			var err error
 
 			command := update.Message.Command()
 			if region, existCommand := regions[command]; existCommand {
-				match, err = l.matchService.FindCurrentMatchByRegionAndSummonerName(region, update.Message.CommandArguments())
+				summoners, err = l.matchService.FindCurrentMatchByRegionAndSummonerName(region, update.Message.CommandArguments())
 			} else {
 				err = fmt.Errorf("command [%s] not found", command)
 			}
 
-			answer := getAnswer(match, err)
+			answer := getAnswer(summoners, err)
 			msg := tgbotapi.NewMessage(innerUpdate.Message.Chat.ID, answer)
 			msg.ReplyToMessageID = innerUpdate.Message.MessageID
 			l.bot.Send(msg)
@@ -67,7 +67,7 @@ type Bot interface {
 	Start()
 }
 
-func NewLolerosBot(matchService application.MatchService) Bot {
+func NewLolerosBot(matchService services.MatchService) Bot {
 	token := os.Getenv("TELEGRAM_TOKEN")
 	if len(token) == 0 {
 		panic(fmt.Errorf("TELEGRAM_TOKEN not set"))

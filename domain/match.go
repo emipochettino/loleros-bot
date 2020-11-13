@@ -24,6 +24,7 @@ func (m match) GetRedTeam() []Summoner {
 	return m.redTeam
 }
 
+
 type Match interface {
 	GetStartTime() time.Time
 	GetCurrentTimeInMinutes() int

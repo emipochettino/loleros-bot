@@ -12,11 +12,15 @@ import (
 type ritoProvider struct {
 	client http.Client
 	token  string
-	assets providers.Assets
+	host   map[string]string
+	cache  Cache
 }
 
-func (r ritoProvider) FindSummonerByRegionAndId(region string, id string) (*providers.SummonerDTO, error) {
-	request, err := http.NewRequest("GET", fmt.Sprintf("https://%s.api.riotgames.com/lol/summoner/v4/summoners/%s", region, id), nil)
+func (r ritoProvider) FindSummonerByRegionAndName(region string, name string) (*providers.SummonerDTO, error) {
+	if cached, isCached := r.cache.Get(fmt.Sprintf("summoner_by_name_%s_%s", region, name)); isCached {
+		return cached.(*providers.SummonerDTO), nil
+	}
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/lol/summoner/v4/summoners/by-name/%s", r.host[region], name), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -42,37 +46,17 @@ func (r ritoProvider) FindSummonerByRegionAndId(region string, id string) (*prov
 		return nil, err
 	}
 
+	r.cache.SetDefault(fmt.Sprintf("summoner_by_name_%s_%s", region, name), &summonerDTO)
+
 	return &summonerDTO, nil
 }
 
-func (r ritoProvider) FindLeaguesByRegionAndSummonerId(region string, summonerId string) ([]providers.LeagueInfo, error) {
-	request, err := http.NewRequest("GET", fmt.Sprintf("https://%s.api.riotgames.com/lol/league/v4/entries/by-summoner/%s", region, summonerId), nil)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Add("X-Riot-Token", r.token)
-
-	response, err := r.client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == 403 {
-		return nil, fmt.Errorf("rito token can be expired")
+func (r ritoProvider) FindSummonerByRegionAndId(region string, id string) (*providers.SummonerDTO, error) {
+	if cached, isCached := r.cache.Get(fmt.Sprintf("summoner_by_id_%s_%s", region, id)); isCached {
+		return cached.(*providers.SummonerDTO), nil
 	}
 
-	var leagues []providers.LeagueInfo
-	err = json.NewDecoder(response.Body).Decode(&leagues)
-	if err != nil {
-		return nil, err
-	}
-
-	return leagues, nil
-}
-
-func (r ritoProvider) FindMatchBySummonerId(region string, summonerId string) (*providers.MatchDTO, error) {
-	request, err := http.NewRequest("GET", fmt.Sprintf("https://%s.api.riotgames.com/lol/spectator/v4/active-games/by-summoner/%s", region, summonerId), nil)
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/lol/summoner/v4/summoners/%s", r.host[region], id), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +73,80 @@ func (r ritoProvider) FindMatchBySummonerId(region string, summonerId string) (*
 	}
 
 	if response.StatusCode == 404 {
+		return nil, fmt.Errorf("summoner not found")
+	}
+
+	var summonerDTO providers.SummonerDTO
+	err = json.NewDecoder(response.Body).Decode(&summonerDTO)
+	if err != nil {
+		return nil, err
+	}
+
+	r.cache.SetDefault(fmt.Sprintf("summoner_by_id_%s_%s", region, id), &summonerDTO)
+
+	return &summonerDTO, nil
+}
+
+func (r ritoProvider) FindLeaguesByRegionAndSummonerId(region string, summonerId string) ([]providers.LeagueInfoDTO, error) {
+	if cached, isCached := r.cache.Get(fmt.Sprintf("league_by_summoner_id_%s_%s", region, summonerId)); isCached {
+		return cached.([]providers.LeagueInfoDTO), nil
+	}
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/lol/league/v4/entries/by-summoner/%s", r.host[region], summonerId), nil)
+
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Add("X-Riot-Token", r.token)
+
+	response, err := r.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == 403 {
+		return nil, fmt.Errorf("rito token can be expired")
+	}
+	if response.StatusCode == 404 {
+		return nil, fmt.Errorf("leagues not found")
+	}
+
+	var leagues []providers.LeagueInfoDTO
+	err = json.NewDecoder(response.Body).Decode(&leagues)
+	if err != nil {
+		return nil, err
+	}
+
+	r.cache.SetDefault(fmt.Sprintf("league_by_summoner_id_%s_%s", region, summonerId), leagues)
+
+	return leagues, nil
+}
+
+func (r ritoProvider) FindMatchBySummonerId(region string, summonerId string) (*providers.MatchDTO, error) {
+	if cached, isCached := r.cache.Get(fmt.Sprintf("match_by_summoner_id_%s_%s", region, summonerId)); isCached {
+		return cached.(*providers.MatchDTO), nil
+	}
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/lol/spectator/v4/active-games/by-summoner/%s", r.host[region], summonerId), nil)
+
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Add("X-Riot-Token", r.token)
+
+	response, err := r.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == 403 {
+		return nil, fmt.Errorf("rito token can be expired")
+	}
+	if response.StatusCode == 404 {
 		return nil, fmt.Errorf("match not found")
+	}
+	if response.StatusCode >= 500 {
+		return nil, fmt.Errorf("something went wrong trying to find the active match")
 	}
 
 	var matchDTO providers.MatchDTO
@@ -98,68 +155,32 @@ func (r ritoProvider) FindMatchBySummonerId(region string, summonerId string) (*
 		return nil, err
 	}
 
+	r.cache.SetDefault(fmt.Sprintf("match_by_summoner_id_%s_%s", region, summonerId), &matchDTO)
+
 	return &matchDTO, nil
 }
 
-func (r ritoProvider) FindQueueById(queueId int64) (*providers.QueueInfoDTO, error) {
-	if r.assets.Queues == nil || len(r.assets.Queues) == 0 {
-		response, err := r.client.Get("http://static.developer.riotgames.com/docs/lol/queues.json")
-		if err != nil {
-			panic(err)
-		}
-		defer response.Body.Close()
-		err = json.NewDecoder(response.Body).Decode(&r.assets.Queues)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	for _, queue := range r.assets.Queues {
-		if queue.QueueId == queueId {
-			return &queue, nil
-		}
-	}
-
-	return nil, fmt.Errorf("could not find the queue with id: %d", queueId)
-}
-
-func (r ritoProvider) FindSummonerByRegionAndName(region string, name string) (*providers.SummonerDTO, error) {
-	request, err := http.NewRequest("GET", fmt.Sprintf("https://%s.api.riotgames.com/lol/summoner/v4/summoners/by-name/%s", region, name), nil)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Add("X-Riot-Token", r.token)
-
-	response, err := r.client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == 403 {
-		return nil, fmt.Errorf("rito token can be expired")
-	}
-
-	if response.StatusCode == 404 {
-		return nil, fmt.Errorf("summoner not found")
-	}
-
-	var summonerDTO providers.SummonerDTO
-	err = json.NewDecoder(response.Body).Decode(&summonerDTO)
-	if err != nil {
-		return nil, err
-	}
-
-	return &summonerDTO, nil
-}
-
-func NewRitoProvider(token string) (application.RitoProvider, error) {
+func NewRitoProvider(host map[string]string, token string, cache Cache) (application.RitoProvider, error) {
 	if len(token) == 0 {
 		return nil, fmt.Errorf("rito token should exist")
 	}
+
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify : true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
-	return ritoProvider{client: http.Client{Transport: tr}, token: token}, nil
+	//TODO receive this by parameter
+	//c := cache.New(30*time.Minute, 40*time.Minute)
+
+	return ritoProvider{
+		client: http.Client{Transport: tr},
+		token:  token,
+		host:   host,
+		cache:  cache,
+	}, nil
+}
+
+type Cache interface {
+	SetDefault(k string, x interface{})
+	Get(k string) (interface{}, bool)
 }

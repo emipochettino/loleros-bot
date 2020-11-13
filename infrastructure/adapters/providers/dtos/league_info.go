@@ -1,6 +1,6 @@
 package infrastructure
 
-type LeagueInfo struct {
+type LeagueInfoDTO struct {
 	QueueType string `json:"queueType"`
 	Tier      string `json:"tier"` //"MASTER"
 	Rank      string `json:"rank"` //"I"
